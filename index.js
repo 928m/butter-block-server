@@ -6,25 +6,25 @@ const problems = ['개미', '계란', '사과', '나무', 'BTS', '똥', 'ken', '
 const userIds = [];
 const userNickNames = [];
 let problemCount = 0;
-let userCount = 0
 
 io.on('connection', function (socket) {
   const userId = socket.client.id;
 
-  socket.on('user', function (userNickname) {
-    let userInfo;
-
+  socket.on('user', function (nickname) {
     if (userIds.length <= 3) {
       userIds.push(userId);
-      userNickNames.push(userNickname);
+      userNickNames.push(nickname);
 
-      userInfo = { userId, userOrder: userCount, userNickNames };
+      const userInfo = {};
+      const order = userIds.indexOf(userId);
+
+      userInfo.id = userId;
+      userInfo.order = order;
 
       socket.emit('order', userInfo);
       io.emit('users', userNickNames);
-      userCount++;
 
-      if(userIds.length === 3) {
+      if (userIds.length === 3) {
         // problems는 랜덤으로
         io.emit('start', {
           userId: userIds[problemCount],
@@ -42,13 +42,10 @@ io.on('connection', function (socket) {
     if (reason === 'transport close') {
       const removeIndex = userIds.indexOf(userId);
 
-      userCount--;
       userIds.splice(removeIndex, 1);
       userNickNames.splice(removeIndex, 1);
     }
   });
 });
 
-http.listen(8081, function(){
-  console.log('listening on *:8081');
-});
+http.listen(8081, function(){ console.log('listening on *:8081'); });
