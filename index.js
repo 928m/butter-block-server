@@ -2,10 +2,13 @@ const app = require('express')();
 const http = require('http').Server(app);
 const io = require('socket.io')(http);
 
-const problems = ['개미', '계란', '사과', '나무', 'BTS', '똥', 'ken', 'javascript'];
+// const problems = ['개미', '계란', '사과', '나무', 'BTS', '똥', 'ken', 'javascript', 'vanilla coding'];
+const problems = ['d', 'd', 'd'];
 const userIds = [];
 const userNickNames = [];
+const users = {};
 const cubes = [];
+const cycle = 3;
 let userCount = 0;
 let problemCount = 0;
 
@@ -13,17 +16,20 @@ io.on('connection', function (socket) {
   const userId = socket.client.id;
 
   socket.on('user', function (nickname) {
-    userCount++;
-
-    if (userCount <= 3) {
+    if (userIds.length <= 3) {
       userIds.push(userId);
-      userNickNames.push(nickname);
+      users[userId] = {
+        id: userId,
+        nickname,
+        score: 0
+      };
+      userNickNames.push(users[userId]);
 
       const userInfo = {};
       const order = userIds.indexOf(userId);
 
       userInfo.id = userId;
-      userInfo.order = order;
+      // userInfo.order = order;
 
       socket.emit('order', userInfo);
       io.emit('users', userNickNames);
@@ -31,14 +37,13 @@ io.on('connection', function (socket) {
       if (userIds.length === 3) {
         // problems는 랜덤으로
         io.emit('start', {
-          userId: userIds[problemCount],
+          userId: userIds[userCount],
           problemLength: problems[problemCount].length
         });
 
-        io.to(userIds[problemCount]).emit('submission', problems[problemCount]);
+        io.to(userIds[userCount]).emit('submission', problems[problemCount]);
       }
     } else {
-      userCount--;
       socket.emit('order', 'be full');
     }
   });
@@ -49,11 +54,50 @@ io.on('connection', function (socket) {
     socket.broadcast.emit('cubes', cubes);
   });
 
+  socket.on('message', function({ id, message }) {
+    const solution = problems[problemCount];
+    const submissionUser = userIds[userCount];
+    const isSubmissionUser = (submissionUser === id);
+    const userNickName = userNickNames[userCount].nickname;
+
+    if (message.includes(solution) && !isSubmissionUser) {
+      users[id].score = users[id].score + 1;
+
+      if (userCount === userNickNames.length - 1) {
+        userCount = 0;
+        problemCount++;
+      } else {
+        userCount++;
+        problemCount++;
+      }
+      // problemCount는 3이면 다시 초기화
+      cubes.length = 0;
+
+      io.emit('message', { id, message });
+      io.emit('pass', { id, solution, userNickName });
+      io.to(userIds[userCount]).emit('submission', problems[problemCount]);
+
+      console.log(problemCount);
+      console.log(userCount);
+      console.log(cycle);
+      console.log((userCount + 1) * cycle);
+      if (problemCount === ((userCount + 1) * cycle)) {
+        io.emit('end', users);
+      } else {
+        io.emit('start', {
+          userId: userIds[userCount],
+          problemLength: problems[userCount].length
+        });
+      }
+    } else {
+      io.emit('message', { id, message });
+    }
+  });
+
   socket.on('disconnect', function (reason) {
     if (reason === 'transport close') {
       const removeIndex = userIds.indexOf(userId);
 
-      userCount--;
       userIds.splice(removeIndex, 1);
       userNickNames.splice(removeIndex, 1);
 
