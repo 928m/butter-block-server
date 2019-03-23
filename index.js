@@ -2,8 +2,7 @@ const app = require('express')();
 const http = require('http').Server(app);
 const io = require('socket.io')(http);
 
-// const problems = ['개미', '계란', '사과', '나무', 'BTS', '똥', 'ken', 'javascript', 'vanilla coding'];
-const problems = ['d', 'd', 'd'];
+const problems = ['1', '22', '333', '나무', 'BTS', '똥', 'ken', 'javascript', 'vanilla coding'];
 const userIds = [];
 const userNickNames = [];
 const users = {};
@@ -48,10 +47,12 @@ io.on('connection', function (socket) {
     }
   });
 
-  socket.on('create cube', function (cube) {
-    cubes.push(cube);
+  socket.on('create cube', function (cubeObj) {
+    socket.broadcast.emit('cubes', cubeObj);
+  });
 
-    socket.broadcast.emit('cubes', cubes);
+  socket.on('remove cube', function (removeCubeIndex) {
+    socket.broadcast.emit('delete cube', removeCubeIndex);
   });
 
   socket.on('message', function({ id, message }) {
@@ -86,7 +87,7 @@ io.on('connection', function (socket) {
       } else {
         io.emit('start', {
           userId: userIds[userCount],
-          problemLength: problems[userCount].length
+          problemLength: problems[problemCount].length
         });
       }
     } else {
