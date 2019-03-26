@@ -2,7 +2,7 @@ const app = require('express')();
 const http = require('http').Server(app);
 const io = require('socket.io')(http);
 
-const problems = ['1', '22', '333', '나무', 'BTS', '똥', 'ken', 'javascript', 'vanilla coding'];
+const problems = ['1', '22', '333'];
 const userIds = [];
 const userNickNames = [];
 const users = {};
@@ -10,6 +10,17 @@ const cubes = [];
 const cycle = 3;
 let userCount = 0;
 let problemCount = 0;
+let cycleCount = 1;
+
+const countAdjustment = () => {
+  if (userCount === userNickNames.length - 1) {
+    userCount = 0;
+    problemCount++;
+  } else {
+    userCount++;
+    problemCount++;
+  }
+};
 
 io.on('connection', function (socket) {
   const userId = socket.client.id;
@@ -37,6 +48,7 @@ io.on('connection', function (socket) {
         // problems는 랜덤으로
         io.emit('start', {
           userId: userIds[userCount],
+          userNickName: userNickNames[userCount].nickname,
           problemLength: problems[problemCount].length
         });
 
@@ -64,30 +76,35 @@ io.on('connection', function (socket) {
     if (message.includes(solution) && !isSubmissionUser) {
       users[id].score = users[id].score + 1;
 
-      if (userCount === userNickNames.length - 1) {
-        userCount = 0;
-        problemCount++;
-      } else {
-        userCount++;
-        problemCount++;
-      }
-      // problemCount는 3이면 다시 초기화
-      cubes.length = 0;
+      countAdjustment();
 
       io.emit('message', { id, message });
       io.emit('pass', { id, solution, userNickName });
       io.to(userIds[userCount]).emit('submission', problems[problemCount]);
 
-      console.log(problemCount);
-      console.log(userCount);
-      console.log(cycle);
-      console.log((userCount + 1) * cycle);
-      if (problemCount === ((userCount + 1) * cycle)) {
+      // 시간초세기
+      // 처음시작할때 socket.on('timer start', fn);
+      // 서버에서 2분후 socket.on('timer end', fn);
+      // 60 * 2 / 60
+      // userCount++ / problemCount++
+      // io.emit('start', {
+      //   userId: userIds[userCount],
+      //   problemLength: problems[problemCount].length
+      // });
+      // io.to(userIds[userCount]).emit('submission', problems[problemCount]);
+
+      // nextQuiz(io);
+
+      if ((cycleCount === cycle) || !problems[problemCount]) {
         io.emit('end', users);
       } else {
+        (problemCount % 3 === 0) && cycleCount++;
+
         io.emit('start', {
           userId: userIds[userCount],
-          problemLength: problems[problemCount].length
+          userNickName: userNickNames[userCount].nickname,
+          problemLength: problems[problemCount].length,
+          timer: (1000 * 60) * 3
         });
       }
     } else {
