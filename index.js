@@ -2,15 +2,50 @@ const app = require('express')();
 const http = require('http').Server(app);
 const io = require('socket.io')(http);
 
-const problems = ['1', '22', '333'];
+const problems = ['1', '2', '3'];
 const userIds = [];
 const userNickNames = [];
 const users = {};
-const cubes = [];
 const cycle = 3;
 let userCount = 0;
 let problemCount = 0;
 let cycleCount = 1;
+let onTimeCount;
+const initialTime = (1000 * 60) * 3;
+let time = initialTime;
+
+function nextQuiz(io) {
+  time = initialTime;
+
+  if ((cycleCount === cycle) || !problems[problemCount]) {
+    io.emit('end', users);
+  } else {
+    const currentUserId = userIds[userCount];
+    (problemCount % 3 === 0) && cycleCount++;
+
+    io.emit('start', {
+      userId: currentUserId,
+      userNickName: users[currentUserId].nickname,
+      problemLength: problems[problemCount].length
+    });
+
+    io.to(userIds[userCount]).emit('submission', problems[problemCount]);
+
+    onTimeCount = setInterval(() => {
+      time -= 1000;
+
+      if (time >= 0) {
+        io.emit('time counter', time);
+      } else {
+        io.emit('time out');
+        time = initialTime;
+        clearInterval(onTimeCount);
+        countAdjustment();
+        nextQuiz(io);
+      }
+    }, 1000);
+  }
+}
 
 const countAdjustment = () => {
   if (userCount === userNickNames.length - 1) {
@@ -33,26 +68,34 @@ io.on('connection', function (socket) {
         nickname,
         score: 0
       };
-      userNickNames.push(users[userId]);
 
-      const userInfo = {};
-      const order = userIds.indexOf(userId);
-
-      userInfo.id = userId;
-      // userInfo.order = order;
-
-      socket.emit('order', userInfo);
-      io.emit('users', userNickNames);
+      socket.emit('user id', userId);
+      io.emit('users', users);
 
       if (userIds.length === 3) {
-        // problems는 랜덤으로
+        const currentUserId = userIds[userCount];
+
         io.emit('start', {
           userId: userIds[userCount],
-          userNickName: userNickNames[userCount].nickname,
+          userNickName: users[currentUserId].nickname,
           problemLength: problems[problemCount].length
         });
 
         io.to(userIds[userCount]).emit('submission', problems[problemCount]);
+
+        onTimeCount = setInterval(() => {
+          time -= 1000;
+
+          if (time >= 0) {
+            io.emit('time counter', time);
+          } else {
+            time = initialTime;
+            io.emit('time out');
+            clearInterval(onTimeCount);
+            countAdjustment();
+            nextQuiz(io);
+          }
+        }, 1000);
       }
     } else {
       socket.emit('order', 'be full');
@@ -71,42 +114,19 @@ io.on('connection', function (socket) {
     const solution = problems[problemCount];
     const submissionUser = userIds[userCount];
     const isSubmissionUser = (submissionUser === id);
-    const userNickName = userNickNames[userCount].nickname;
+    const userNickName = users[id].nickname;
 
     if (message.includes(solution) && !isSubmissionUser) {
       users[id].score = users[id].score + 1;
 
       countAdjustment();
+      clearInterval(onTimeCount);
 
       io.emit('message', { id, message });
-      io.emit('pass', { id, solution, userNickName });
+      io.emit('pass', { id, solution, userNickName, users });
       io.to(userIds[userCount]).emit('submission', problems[problemCount]);
 
-      // 시간초세기
-      // 처음시작할때 socket.on('timer start', fn);
-      // 서버에서 2분후 socket.on('timer end', fn);
-      // 60 * 2 / 60
-      // userCount++ / problemCount++
-      // io.emit('start', {
-      //   userId: userIds[userCount],
-      //   problemLength: problems[problemCount].length
-      // });
-      // io.to(userIds[userCount]).emit('submission', problems[problemCount]);
-
-      // nextQuiz(io);
-
-      if ((cycleCount === cycle) || !problems[problemCount]) {
-        io.emit('end', users);
-      } else {
-        (problemCount % 3 === 0) && cycleCount++;
-
-        io.emit('start', {
-          userId: userIds[userCount],
-          userNickName: userNickNames[userCount].nickname,
-          problemLength: problems[problemCount].length,
-          timer: (1000 * 60) * 3
-        });
-      }
+      nextQuiz(io);
     } else {
       io.emit('message', { id, message });
     }
@@ -115,11 +135,12 @@ io.on('connection', function (socket) {
   socket.on('disconnect', function (reason) {
     if (reason === 'transport close') {
       const removeIndex = userIds.indexOf(userId);
+      const removeUserId = userIds[removeIndex];
 
       userIds.splice(removeIndex, 1);
-      userNickNames.splice(removeIndex, 1);
+      delete users[removeUserId];
 
-      io.emit('users', userNickNames);
+      io.emit('users', users);
     }
   });
 });
