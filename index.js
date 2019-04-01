@@ -2,16 +2,15 @@ const app = require('express')();
 const http = require('http').Server(app);
 const io = require('socket.io')(http);
 
-const problems = ['1', '2', '3'];
+const problems = ['계란', '사과', '바닐라코딩', '아빠곰', '피땀눈물', '핫도그'];
 const userIds = [];
-const userNickNames = [];
 const users = {};
 const cycle = 3;
+const initialTime = (1000 * 60) * 3;
 let userCount = 0;
 let problemCount = 0;
 let cycleCount = 1;
 let onTimeCount;
-const initialTime = (1000 * 60) * 3;
 let time = initialTime;
 
 function nextQuiz(io) {
@@ -47,21 +46,21 @@ function nextQuiz(io) {
   }
 }
 
-const countAdjustment = () => {
-  if (userCount === userNickNames.length - 1) {
+function countAdjustment() {
+  if (userCount === userIds.length - 1) {
     userCount = 0;
     problemCount++;
   } else {
     userCount++;
     problemCount++;
   }
-};
+}
 
 io.on('connection', function (socket) {
   const userId = socket.client.id;
 
   socket.on('user', function (nickname) {
-    if (userIds.length <= 3) {
+    if (userIds.length < 3) {
       userIds.push(userId);
       users[userId] = {
         id: userId,
@@ -97,8 +96,8 @@ io.on('connection', function (socket) {
           }
         }, 1000);
       }
-    } else {
-      socket.emit('order', 'be full');
+    } else if (userIds.length >= 3) {
+      socket.emit('full', 'out');
     }
   });
 
@@ -117,7 +116,7 @@ io.on('connection', function (socket) {
     const userNickName = users[id].nickname;
 
     if (message.includes(solution) && !isSubmissionUser) {
-      users[id].score = users[id].score + 1;
+      users[id].score = users[id].score + 10;
 
       countAdjustment();
       clearInterval(onTimeCount);
